@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique @db.VarChar(40)
+  description String?
+  icon        String?  @db.VarChar(10)
+  color       String?  @db.VarChar(7)
+  textColor   String?  @db.VarChar(7)
+  reports     Report[]
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  name        String   @db.VarChar(255)
+  slug        String   @unique @db.VarChar(255)
+  description String?
+  format      String   @db.VarChar(50) @default("json")
+  database    String   @db.VarChar(100)
+  endpoint    String?  @db.VarChar(255)
+  status      String   @db.VarChar(20) @default("active")
+  scheduled   Boolean  @default(false)
+  columnMap   Json     @default("[]")
+  parameters  Json     @default("[]")
+  filters     Json     @default("[]")
+  config      Json     @default("{}")
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  authorId    String?  @db.VarChar(36)
+  isPublic    Boolean  @default(false)
+  author      User?    @relation(fields: [authorId], references: [id])
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Schedule {
+  id           String   @id @default(uuid())
+  reportName   String   @db.VarChar(100)
+  cron         String   @db.VarChar(50)
+  frequency    String   @db.VarChar(20)
+  time         String   @db.VarChar(10)
+  timezone     String   @db.VarChar(50)
+  nextRun      String?
+  lastRun      String?
+  successRate  Float?   @default(0)
+  totalRuns    Int?     @default(0)
+  format       String   @db.VarChar(20)
+  delivery     String   @db.VarChar(20)
+  recipient    String   @db.VarChar(255)
+  status       String   @db.VarChar(20) @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model RunHistory {
+  id           String   @id @default(uuid())
+  reportName   String   @db.VarChar(100)
+  scheduleId   String?  @db.VarChar(36)
+  status       String   @db.VarChar(20) // success, failed, processing
+  duration     Int?     // duration in ms
+  rowCount     Int?     @default(0)
+  fileSize     String?  @db.VarChar(50)
+  outputFormat String   @db.VarChar(20)
+  errorMessage String?  @db.Text
+  trigger      String   @db.VarChar(20) // manual, scheduled
+  executedAt   DateTime @default(now())
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(100)
+  email     String   @unique @db.VarChar(150)
+  password  String   @db.VarChar(255)
+  role      String   @db.VarChar(20) @default("user")
+  reports   Report[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

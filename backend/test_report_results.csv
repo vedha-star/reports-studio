@@ -1,0 +1,11 @@
+Module,Test Case,Status,Result
+Auth,User Registration,PASS,Created account test2@runner.com.
+Auth,Login Workflow,PASS,Persistent session established.
+Dashboard,Data Synchronization,PASS,Real-time counts correctly displayed.
+Builder,API Dataset Discovery,PASS,Detected 7 fields for question_paper.
+Builder,Report Publishing,PASS,Automated Test Report successfully persisted.
+Categories,Folder Management,FIXED,Modal Z-index fixed; button now functional.
+Preview,Fallback Data Rendering,PASS,5 sample records displayed for empty API.
+Tester,Execution Engine,PASS,Run successful with 7.6s latency.
+History,Automated Logging,PASS,Run record found in History with correct stats.
+Cleanup,Resource Deletion,PASS,Deleted test report and verified cleanup.

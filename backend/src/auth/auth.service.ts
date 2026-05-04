@@ -84,7 +84,10 @@ export class AuthService {
     return { token, user };
   }
 
-  async updateProfile(userId: string, data: { name?: string; email?: string; preferences?: any }) {
+  async updateProfile(
+    userId: string,
+    data: { name?: string; email?: string; preferences?: any },
+  ) {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data,
@@ -112,7 +115,6 @@ export class AuthService {
     await this.prisma.runHistory.deleteMany({ where: { userId } });
     await this.prisma.schedule.deleteMany({ where: { userId } });
     await this.prisma.report.deleteMany({ where: { authorId: userId } });
-    
     await this.prisma.user.delete({ where: { id: userId } });
     return { success: true };
   }

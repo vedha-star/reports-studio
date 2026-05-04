@@ -16,7 +16,7 @@ export default function HistoryPage() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
-  const pageSize = 8;
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     fetchHistory();
@@ -44,7 +44,12 @@ export default function HistoryPage() {
   };
 
   const filteredRuns = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
     return runs.filter(run => {
+      // ONLY TODAY FILTER
+      const runDate = new Date(run.executedAt).toISOString().split('T')[0];
+      if (runDate !== today) return false;
+
       const queryText = query.trim().toLowerCase();
       const name = (run.reportName || '').toLowerCase();
       if (queryText && !name.includes(queryText)) return false;
@@ -109,6 +114,17 @@ export default function HistoryPage() {
               <option value="success">Success</option>
               <option value="failed">Failed</option>
             </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>
+              <span>Rows:</span>
+              <select 
+                value={pageSize} 
+                onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--background)', fontSize: 12, outline: 'none', cursor: 'pointer', fontWeight: 800 }}>
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+              </select>
+            </div>
           </div>
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 24, overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.03)' }}>

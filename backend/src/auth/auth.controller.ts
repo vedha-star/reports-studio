@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Patch,
   Body,
   HttpCode,
   HttpStatus,
@@ -8,6 +9,7 @@ import {
   UseGuards,
   Get,
   Request,
+  UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -47,5 +49,27 @@ export class AuthController {
   @Get('refresh')
   refresh(@Request() req: { user: { userId: string } }) {
     return this.authService.refresh(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('profile')
+  updateProfile(@Request() req: any, @Body() body: any) {
+    return this.authService.updateProfile(req.user.userId, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(@Request() req: any, @Body() body: any) {
+    return this.authService.changePassword(
+      req.user.userId,
+      body.oldPassword,
+      body.newPassword,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('delete-account')
+  deleteAccount(@Request() req: any) {
+    return this.authService.deleteAccount(req.user.userId);
   }
 }

@@ -16,12 +16,9 @@ export class ReportsService {
     private dynamicStudio: DynamicStudioService,
   ) {}
 
-  findAll(authorId?: string) {
-    const where: any = authorId
-      ? { OR: [{ authorId }, { isPublic: true }] }
-      : { isPublic: true };
+  findAll(authorId: string) {
     return this.prisma.report.findMany({
-      where,
+      where: { authorId },
       include: { category: true } as any,
       orderBy: { updatedAt: 'desc' },
     });
@@ -50,8 +47,11 @@ export class ReportsService {
     return this.prisma.report.delete({ where: { id } });
   }
 
-  getCategories() {
-    return this.prisma.category.findMany({ orderBy: { name: 'asc' } });
+  getCategories(userId: string) {
+    return this.prisma.category.findMany({
+      where: { createdBy: userId },
+      orderBy: { name: 'asc' },
+    });
   }
 
   createCategory(data: Prisma.CategoryCreateInput) {
@@ -60,6 +60,10 @@ export class ReportsService {
 
   removeCategory(id: string) {
     return this.prisma.category.delete({ where: { id } });
+  }
+
+  findCategoryByName(name: string) {
+    return this.prisma.category.findFirst({ where: { name } });
   }
 
   async bulkDelete(ids: string[]) {
@@ -82,21 +86,20 @@ export class ReportsService {
     });
   }
 
-  async getDashboardStats(authorId?: string) {
-    const where: any = authorId
-      ? { OR: [{ authorId }, { isPublic: true }] }
-      : { isPublic: true };
+  async getDashboardStats(authorId: string) {
+    const where = { authorId };
 
     const [totalReports, totalCategories, todayRuns] = await Promise.all([
       this.prisma.report.count({ where }),
-      this.prisma.category.count(),
+      this.prisma.category.count({ where: { createdBy: authorId } }),
       this.prisma.runHistory.count({
         where: {
+          userId: authorId,
           executedAt: {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
           },
           status: 'success',
-        },
+        } as any,
       }),
     ]);
 
@@ -108,7 +111,7 @@ export class ReportsService {
     };
   }
 
-  async exportToExcel(id: string, res: Response) {
+  async exportToExcel(id: string, res: Response, userId?: string) {
     const report = (await this.findOne(id)) as any;
     const data = await this.dynamicStudio.runQuery(
       report.endpoint,
@@ -162,7 +165,8 @@ export class ReportsService {
         rowCount: Array.isArray(data) ? data.length : 0,
         outputFormat: 'xlsx',
         trigger: 'manual_export',
-      },
+        userId: userId,
+      } as any,
     });
   }
 }

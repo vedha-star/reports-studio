@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/shared/Sidebar';
 import Topbar from '@/components/shared/Topbar';
@@ -56,6 +56,10 @@ export default function CategoriesPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '', icon: '📁', color: '#3B82F6', textColor: '#FFFFFF' });
   const [editCategoryId, setEditCategoryId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -110,6 +114,10 @@ export default function CategoriesPage() {
     return true;
   });
 
+  const pageCount = Math.max(1, Math.ceil(visibleReports.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pagedReports = visibleReports.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   const openCategoryModal = (category?: Category) => {
     if (category) {
       setEditCategoryId(category.id);
@@ -150,6 +158,51 @@ export default function CategoriesPage() {
       fetchData();
     } catch (error) {
       console.error('Error deleting category:', error);
+    }
+  };
+
+  const handleClearWorkspace = async () => {
+    if (!confirm('Are you sure you want to clear your workspace? This will delete all current reports and folders.')) return;
+    try {
+      await api.post('/v1/reports/bulk-clear-all');
+      await fetchData();
+      alert('Workspace cleared.');
+    } catch (error) {
+      console.error('Failed to clear workspace:', error);
+      alert('Failed to clear workspace');
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      const reportsToImport = Array.isArray(data) ? data : data.reports || [];
+      const categoriesToImport = data.categories || [];
+
+      await api.post('/v1/reports/import/json', {
+        reports: reportsToImport,
+        categories: categoriesToImport,
+      });
+
+      setImporting(false);
+      await fetchData();
+      alert('Import successful! Your folders and reports have been restored.');
+      
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (error) {
+      console.error('Failed to import:', error);
+      alert('Import failed. Please check the file format.');
+      setImporting(false);
     }
   };
 
@@ -215,6 +268,41 @@ export default function CategoriesPage() {
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>Organise reports into folders for easy navigation</div>
               </div>
               <div style={{ flex: 1 }} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
+              <button onClick={handleClearWorkspace}
+                style={{ padding: '6px 14px', border: '1px solid #FECACA', background: '#FEF2F2', borderRadius: 8, color: '#DC2626', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                🗑️ Clear Workspace
+              </button>
+              <button onClick={handleImportClick} disabled={importing}
+                style={{ padding: '6px 14px', border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: importing ? 0.7 : 1 }}>
+                {importing ? '⏳ Importing...' : '⬆ Import Folders'}
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const res = await api.post('/v1/reports/export/categories');
+                    const dataStr = JSON.stringify(res.data, null, 2);
+                    const blob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `folders-export-${new Date().toISOString().split('T')[0]}.json`;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                  } catch (e) {
+                    alert('Export failed');
+                  }
+                }}
+                style={{ padding: '6px 14px', border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                ⬇ Export Folders
+              </button>
               <button onClick={() => openCategoryModal()}
                 style={{ padding: '6px 14px', border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                 + New Category
@@ -287,10 +375,21 @@ export default function CategoriesPage() {
                   <option value="scheduled">Scheduled</option>
                   <option value="ondemand">On-demand</option>
                 </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginLeft: 12 }}>
+                  <span>Rows:</span>
+                  <select 
+                    value={pageSize} 
+                    onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                    style={{ padding: '6px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--background)', fontSize: 11, outline: 'none', cursor: 'pointer', fontWeight: 800 }}>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                  </select>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gap: 12 }}>
-                {visibleReports.map(report => (
+                {pagedReports.map(report => (
                   <div key={report.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 14, border: '1px solid var(--border)', background: 'var(--background)' }}>
                     <div style={{ display: 'flex', gap: 14, alignItems: 'center', minWidth: 0 }}>
                       <div style={{ width: 44, height: 44, borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{selectedCategory?.icon || '??'}</div>
@@ -318,6 +417,14 @@ export default function CategoriesPage() {
                     No reports match your filters. Try changing the search or status.
                   </div>
                 )}
+              </div>
+              {/* Pagination Controls */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleReports.length)} of {visibleReports.length} reports</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button disabled={currentPage === 1} onClick={() => setPage(p => p - 1)} style={{ padding: '6px 12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 600 }}>Previous</button>
+                  <button disabled={currentPage === pageCount} onClick={() => setPage(p => p + 1)} style={{ padding: '6px 12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, cursor: currentPage === pageCount ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 600 }}>Next</button>
+                </div>
               </div>
             </div>
           </div>

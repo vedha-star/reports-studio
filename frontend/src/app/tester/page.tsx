@@ -1,3 +1,4 @@
+ 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
@@ -55,6 +56,10 @@ export default function TesterPage() {
   const [testData, setTestData] = useState<any[]>([]);
   const [executionStats, setExecutionStats] = useState({ rows: 0, time: 0 });
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
   useEffect(() => {
     api.get('/v1/reports').then(res => {
       setReports(res.data);
@@ -70,15 +75,11 @@ export default function TesterPage() {
 
   const columns = buildColumns(selectedReport, filteredData[0] ?? testData[0]);
 
-  async function runReport() {
-    const FALLBACK_DATASET = [
-      { id: 1, reference_no: 'REF-001', category: 'Operational', status: 'Pending', amount: 1250.50, date: '2024-03-20', branch: 'Dubai' },
-      { id: 2, reference_no: 'REF-002', category: 'Finance', status: 'Completed', amount: 3400.00, date: '2024-03-21', branch: 'Abu Dhabi' },
-      { id: 3, reference_no: 'REF-003', category: 'HR', status: 'In Review', amount: 890.25, date: '2024-03-22', branch: 'Sharjah' },
-      { id: 4, reference_no: 'REF-004', category: 'Operational', status: 'Pending', amount: 2100.10, date: '2024-03-23', branch: 'Dubai' },
-      { id: 5, reference_no: 'REF-005', category: 'Finance', status: 'Cancelled', amount: 0.00, date: '2024-03-24', branch: 'Ajman' },
-    ];
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredData.length / (rowsPerPage || 10)) || 1;
+  const paginatedData = filteredData.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
+  async function runReport() {
     if (!selectedReportId) return;
     const report = reports.find(r => r.id === selectedReportId);
     if (!report?.endpoint) { alert('This report has no Query Studio endpoint linked.'); return; }
@@ -91,52 +92,18 @@ export default function TesterPage() {
         parameters: {},
       });
       
-      let data = Array.isArray(res.data) ? res.data : 
+      const data = Array.isArray(res.data) ? res.data : 
                  (res.data?.data && Array.isArray(res.data.data)) ? res.data.data :
                  (res.data?.results && Array.isArray(res.data.results)) ? res.data.results : [];
-
-      const isApi137 = (report.endpoint || '').includes('137');
-      if (data.length === 0 && !isApi137) {
-        data = FALLBACK_DATASET;
-      }
 
       setTestData(data);
       const duration = Date.now() - start;
       setExecutionStats({ rows: data.length, time: duration / 1000 });
       setHasRun(true);
 
-      // SAVE TO HISTORY
-      await api.post('/v1/history', {
-        reportName: report.name,
-        status: 'success',
-        duration: duration,
-        rowCount: data.length,
-        outputFormat: 'json',
-        trigger: 'manual'
-      }).catch(err => console.error("History log failed:", err));
-
     } catch (e) {
       console.error(e);
-      const isApi137 = (report?.endpoint || '').includes('137');
-      
-      if (!isApi137) {
-        setTestData(FALLBACK_DATASET);
-        setExecutionStats({ rows: FALLBACK_DATASET.length, time: (Date.now() - start) / 1000 });
-        setHasRun(true);
-      } else {
-        // SAVE FAILED RUN TO HISTORY
-        api.post('/v1/history', {
-          reportName: report?.name || 'Unknown',
-          status: 'failed',
-          duration: Date.now() - start,
-          rowCount: 0,
-          outputFormat: 'json',
-          trigger: 'manual',
-          errorMessage: String(e)
-        }).catch(err => console.error("History log failed:", err));
-        
-        alert('Execution failed for API 137. Check if Query Studio is online.');
-      }
+      alert('Execution failed. Check if Query Studio is online.');
     } finally { setIsRunning(false); }
   }
 
@@ -290,7 +257,7 @@ export default function TesterPage() {
             </div>
 
             {/* TAB CONTENT */}
-            <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
+            <div style={{ flex: 1, overflow: 'auto', padding: 24, display: 'flex', flexDirection: 'column' }}>
               {activeTab === 'sql' && (
                 <div style={{ 
                   background: '#0F172A', 
@@ -335,32 +302,71 @@ export default function TesterPage() {
                     <div style={{ fontWeight: 700 }}>No results match your search.</div>
                   </div>
                 ) : (
-                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr style={{ background: '#1A3557' }}>
-                          {columns.map((col: any) => (
-                            <th key={col.id || col.field}
-                              style={{ padding: '14px 16px', color: 'var(--surface)', textAlign: col.align || 'left', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap' }}>
-                              {col.label}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredData.slice(0, 100).map((row: any, i: number) => (
-                          <tr key={i} style={{ borderBottom: '1px solid var(--background)', background: i % 2 === 1 ? 'var(--background)' : 'var(--surface)' }}>
+                  <>
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', flex: 1 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#1A3557' }}>
                             {columns.map((col: any) => (
-                              <td key={col.id || col.field}
-                                style={{ padding: '11px 16px', color: 'var(--text-primary)', fontSize: 12, textAlign: col.align || 'left', fontWeight: 500 }}>
-                                {getCell(row, col)}
-                              </td>
+                              <th key={col.id || col.field}
+                                style={{ padding: '14px 16px', color: 'var(--surface)', textAlign: col.align || 'left', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap' }}>
+                                {col.label}
+                              </th>
                             ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {paginatedData.map((row: any, i: number) => (
+                            <tr key={i} style={{ borderBottom: '1px solid var(--background)', background: i % 2 === 1 ? 'var(--background)' : 'var(--surface)' }}>
+                              {columns.map((col: any) => (
+                                <td key={col.id || col.field}
+                                  style={{ padding: '11px 16px', color: 'var(--text-primary)', fontSize: 12, textAlign: col.align || 'left', fontWeight: 500 }}>
+                                  {getCell(row, col)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* PAGINATION FOOTER */}
+                    <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Rows:</span>
+                        <select 
+                          value={rowsPerPage} 
+                          onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                          style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', fontSize: 12, fontWeight: 700, outline: 'none' }}
+                        >
+                          {[5, 10, 15, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          Showing <b>{(currentPage - 1) * rowsPerPage + 1}</b> - <b>{Math.min(currentPage * rowsPerPage, filteredData.length)}</b> of <b>{filteredData.length}</b>
+                        </span>
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button 
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                          disabled={currentPage === 1}
+                          style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', background: currentPage === 1 ? 'var(--background)' : 'var(--surface)', color: currentPage === 1 ? '#CBD5E1' : 'var(--text-primary)', fontSize: 11, fontWeight: 800, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                        >
+                          PREV
+                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: 12, fontWeight: 700 }}>
+                          {currentPage} / {totalPages}
+                        </div>
+                        <button 
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                          disabled={currentPage === totalPages}
+                          style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', background: currentPage === totalPages ? 'var(--background)' : 'var(--surface)', color: currentPage === totalPages ? '#CBD5E1' : 'var(--text-primary)', fontSize: 11, fontWeight: 800, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                        >
+                          NEXT
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )
               )}
 
@@ -379,7 +385,7 @@ export default function TesterPage() {
               {activeTab === 'response' && (
                 <div style={{ background: 'var(--text-primary)', borderRadius: 16, padding: 24 }}>
                   <pre style={{ margin: 0,  fontSize: 12, color: '#86EFAC', lineHeight: 1.6 }}>
-                    {JSON.stringify(testData.slice(0, 5), null, 2)}
+                    {JSON.stringify(testData, null, 2)}
                   </pre>
                 </div>
               )}

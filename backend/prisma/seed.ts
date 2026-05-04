@@ -1,6 +1,7 @@
+/* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+ 
+ 
 
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -76,7 +77,6 @@ async function main() {
     await prisma.category.create({
       data: {
         ...cat,
-        reportIds: [],
       },
     });
   }

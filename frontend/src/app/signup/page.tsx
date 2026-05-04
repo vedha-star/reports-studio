@@ -217,7 +217,7 @@ export default function SignupPage() {
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#0F172A', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Confirm Password</label>
                 <input
                   suppressHydrationWarning
-                  type="password" value={confirmPassword}
+                  type={showPassword ? 'text' : 'password'} value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   onBlur={() => setTouched(t => ({ ...t, confirmPassword: true }))}
                   placeholder="Re-enter your password"

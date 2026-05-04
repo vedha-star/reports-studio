@@ -22,9 +22,6 @@ export default function Sidebar() {
       { icon: '🔄', label: 'Import/Export', path: '/import-export' },
       { icon: '🗂️', label: 'Categories', path: '/categories' },
     ]},
-    { section: 'MFE', items: [
-      { icon: '🧩', label: 'MFE', path: '/mfe' },
-    ]},
   ];
 
   return (

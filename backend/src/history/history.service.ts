@@ -1,16 +1,26 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { RunHistory, Prisma } from '@prisma/client';
 
 @Injectable()
 export class HistoryService {
   constructor(private prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.runHistory.findMany({
+  async findAll(userId: string) {
+    const history = await this.prisma.runHistory.findMany({
+      where: { userId } as unknown as Prisma.RunHistoryWhereInput,
       orderBy: { executedAt: 'desc' },
     });
+
+    // Remove duplicates: Keep only the most recent run for each report name
+    const uniqueMap = new Map<string, RunHistory>();
+    history.forEach((run) => {
+      if (!uniqueMap.has(run.reportName)) {
+        uniqueMap.set(run.reportName, run);
+      }
+    });
+
+    return Array.from(uniqueMap.values());
   }
 
   async findOne(id: string) {
@@ -19,16 +29,10 @@ export class HistoryService {
     });
   }
 
-  async create(data: any) {
+  async create(data: Prisma.RunHistoryCreateInput) {
     return this.prisma.runHistory.create({
       data: {
-        reportName: data.reportName,
-        status: data.status,
-        duration: data.duration,
-        rowCount: data.rowCount,
-        outputFormat: data.outputFormat,
-        trigger: data.trigger,
-        errorMessage: data.errorMessage,
+        ...data,
         executedAt: new Date(),
       },
     });

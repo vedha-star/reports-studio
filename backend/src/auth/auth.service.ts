@@ -82,4 +82,37 @@ export class AuthService {
     });
     return { token, user };
   }
+
+  async updateProfile(userId: string, data: { name?: string; email?: string; preferences?: any }) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+    return user;
+  }
+
+  async changePassword(userId: string, oldPass: string, newPass: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+
+    const valid = await bcrypt.compare(oldPass, user.password);
+    if (!valid) throw new BadRequestException('Invalid old password');
+
+    const hashed = await bcrypt.hash(newPass, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashed },
+    });
+    return { success: true };
+  }
+
+  async deleteAccount(userId: string) {
+    // Delete related data first
+    await this.prisma.runHistory.deleteMany({ where: { userId } });
+    await this.prisma.schedule.deleteMany({ where: { userId } });
+    await this.prisma.report.deleteMany({ where: { authorId: userId } });
+    
+    await this.prisma.user.delete({ where: { id: userId } });
+    return { success: true };
+  }
 }

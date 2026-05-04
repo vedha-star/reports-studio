@@ -64,7 +64,8 @@ export class SchedulesService implements OnModuleInit {
               rowCount: Array.isArray(data) ? data.length : 0,
               outputFormat: report.format || 'xlsx',
               trigger: 'scheduled',
-            },
+              userId: (sched as any).userId,
+            } as any,
           });
         } catch (err: any) {
           this.logger.error(
@@ -79,9 +80,9 @@ export class SchedulesService implements OnModuleInit {
               rowCount: 0,
               outputFormat: report.format || 'xlsx',
               trigger: 'scheduled',
-
+              userId: (sched as any).userId,
               errorMessage: err.message,
-            },
+            } as any,
           });
         }
       }
@@ -90,8 +91,9 @@ export class SchedulesService implements OnModuleInit {
     }
   }
 
-  findAll() {
+  findAll(userId: string) {
     return this.prisma.schedule.findMany({
+      where: { userId } as any,
       orderBy: { updatedAt: 'desc' },
     });
   }

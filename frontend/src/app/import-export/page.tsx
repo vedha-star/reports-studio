@@ -24,6 +24,8 @@ export default function ImportExportPage() {
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [importDone, setImportDone] = useState(false);
   const [showNewReportForm, setShowNewReportForm] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -172,13 +174,16 @@ export default function ImportExportPage() {
       const reportsToImport = Array.isArray(data) ? data : data.reports || [];
       const categoriesToImport = data.categories || [];
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const response = await api.post('/v1/reports/import/json', {
         reports: reportsToImport,
         categories: categoriesToImport,
       });
 
       setImporting(false);
+      
+      const { imported, updated, failed } = response.data;
+      const msg = `Success! Imported: ${imported}, Updated: ${updated}${failed > 0 ? `, Failed: ${failed}` : ''}`;
+      alert(msg);
       
       setImportDone(true);
 
@@ -199,15 +204,6 @@ export default function ImportExportPage() {
     }
   };
 
-  const handleDuplicate = async (report: Report) => {
-    try {
-      await api.post(`/v1/reports/${report.id}/duplicate`);
-      await fetchReports();
-    } catch (error) {
-      console.error('Failed to duplicate report:', error);
-      alert('Failed to duplicate report');
-    }
-  };
 
   const handleDelete = async (report: Report) => {
     if (!confirm(`Are you sure you want to delete "${report.name}"?`)) return;
@@ -218,6 +214,21 @@ export default function ImportExportPage() {
     } catch (error) {
       console.error('Failed to delete report:', error);
       alert('Failed to delete report');
+    }
+  };
+
+  const handleClearWorkspace = async () => {
+    if (!confirm('Are you sure you want to clear your workspace? This will delete all current reports and start a fresh session.')) return;
+    try {
+      setLoading(true);
+      await api.post('/v1/reports/bulk-clear-all');
+      await fetchReports();
+      alert('Workspace cleared. You can now import your JSON files.');
+    } catch (error) {
+      console.error('Failed to clear workspace:', error);
+      alert('Failed to clear workspace');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -272,6 +283,10 @@ export default function ImportExportPage() {
     );
   }, [reports, search]);
 
+  const pageCount = Math.max(1, Math.ceil(filteredReports.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pagedTemplates = filteredReports.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
     <div style={{ display: 'flex', height: '100vh', fontSize: 13, color: 'var(--text-primary)', background: 'var(--background)' }}>
       <Sidebar />
@@ -287,10 +302,16 @@ export default function ImportExportPage() {
               <div style={{ fontSize: 18, fontWeight: 800 }}>Import / Export</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Template portability — export and import report configurations as JSON</div>
             </div>
-            <button onClick={() => setShowNewReportForm(true)}
-              style={{ padding: '8px 16px', background: 'var(--primary)', color: 'var(--surface)', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              ➕ New Report
-            </button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={handleClearWorkspace}
+                style={{ padding: '8px 16px', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                🗑️ Clear Workspace
+              </button>
+              <button onClick={() => setShowNewReportForm(true)}
+                style={{ padding: '8px 16px', background: 'var(--primary)', color: 'var(--surface)', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                ➕ New Report
+              </button>
+            </div>
           </div>
 
           {/* IE GRID — from index.html .ie-grid */}
@@ -436,6 +457,17 @@ export default function ImportExportPage() {
                   placeholder="Filter templates..." 
                   style={{ maxWidth: 240, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 11, outline: 'none', background: 'var(--background)' }}
                 />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>
+                  <span>Rows:</span>
+                  <select 
+                    value={pageSize} 
+                    onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                    style={{ padding: '3px 6px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--background)', fontSize: 10, outline: 'none', cursor: 'pointer', fontWeight: 800 }}>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                  </select>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{filteredReports.length} templates</span>
@@ -453,7 +485,7 @@ export default function ImportExportPage() {
               ) : filteredReports.length === 0 ? (
                 <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No reports match your search.</div>
               ) : (
-                filteredReports.map((report) => (
+                pagedTemplates.map((report) => (
                   <div key={report.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: '1px solid var(--border)', borderRadius: 8, marginBottom: 6, background: 'var(--surface)', transition: 'background 0.1s' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--background)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'var(--surface)')}>
@@ -476,10 +508,6 @@ export default function ImportExportPage() {
                         style={{ padding: '4px 10px', background: 'var(--primary-light)', color: 'var(--primary)', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
                         ⬇ Export
                       </button>
-                      <button onClick={() => handleDuplicate(report)}
-                        style={{ padding: '4px 10px', background: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                        📋 Duplicate
-                      </button>
                       <button onClick={() => handleDelete(report)}
                         style={{ padding: '4px 10px', background: '#FEF2F2', color: '#DC2626', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
                         🗑️
@@ -488,6 +516,14 @@ export default function ImportExportPage() {
                   </div>
                 ))
               )}
+            </div>
+            {/* Pagination Controls */}
+            <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--background)' }}>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredReports.length)} of {filteredReports.length}</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button disabled={currentPage === 1} onClick={() => setPage(p => p - 1)} style={{ padding: '4px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontSize: 10, fontWeight: 600 }}>Previous</button>
+                <button disabled={currentPage === pageCount} onClick={() => setPage(p => p + 1)} style={{ padding: '4px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: currentPage === pageCount ? 'not-allowed' : 'pointer', fontSize: 10, fontWeight: 600 }}>Next</button>
+              </div>
             </div>
           </div>
 

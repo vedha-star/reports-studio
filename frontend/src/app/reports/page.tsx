@@ -26,6 +26,8 @@ export default function ReportListPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchData = async () => {
     try {
@@ -103,6 +105,10 @@ export default function ReportListPage() {
     if (filterSched === 'ondemand' && r.scheduled) return false;
     return true;
   });
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pagedReports = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const toggleCollapse = (id: string) => {
     setCollapsed(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
@@ -454,6 +460,17 @@ export default function ReportListPage() {
               <option value="scheduled">Scheduled</option>
               <option value="ondemand">On-demand</option>
             </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginLeft: 12 }}>
+              <span>Rows:</span>
+              <select 
+                value={pageSize} 
+                onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 11, outline: 'none', cursor: 'pointer', fontWeight: 800 }}>
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+              </select>
+            </div>
             <div style={{ flex: 1 }} />
 
             {/* View toggle — PRD Section 4.5 */}
@@ -525,18 +542,16 @@ export default function ReportListPage() {
               </thead>
               <tbody>
                 {view === 'flat' ? (
-                  filtered.map(r => <ReportRow key={r.id} r={r} />)
+                  pagedReports.map(r => <ReportRow key={r.id} r={r} />)
                 ) : (
-                  // GROUPED VIEW — PRD Section 4.1
                   <>
                     {categories.map(cat => {
-                      const catReports = filtered.filter(r => r.categoryId === cat.id);
+                      const catReports = pagedReports.filter(r => r.categoryId === cat.id);
+                      if (catReports.length === 0) return null;
                       const isCollapsed = collapsed.includes(cat.id);
-                     return (
-                <Fragment key={cat.id}>
-    
-                          {/* Group header */}
-                          <tr key={`hd-${cat.id}`} onClick={() => toggleCollapse(cat.id)} style={{ cursor: 'pointer', background: 'var(--background)' }}>
+                      return (
+                        <Fragment key={cat.id}>
+                          <tr onClick={() => toggleCollapse(cat.id)} style={{ cursor: 'pointer', background: 'var(--background)' }}>
                             <td colSpan={9} style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <input type="checkbox" onChange={() => {
@@ -546,11 +561,7 @@ export default function ReportListPage() {
                                 }} onClick={e => e.stopPropagation()} />
                                 <span style={{ width: 24, height: 24, background: cat.color, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>{cat.icon}</span>
                                 <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>{cat.name}</span>
-                                <span style={{ background: 'var(--primary-light)', color: 'var(--primary-dark)', padding: '1px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>{catReports.length} reports</span>
-                                <span style={{ background: '#DCFCE7', color: '#166534', padding: '1px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>{catReports.filter(r => r.status === 'active').length} active</span>
-                                <span style={{ background: 'var(--primary-light)', color: 'var(--primary-dark)', padding: '1px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>{catReports.filter(r => r.scheduled).length} scheduled</span>
                                 <div style={{ flex: 1 }} />
-                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>📁</span>
                                 <span style={{ fontSize: 11, color: 'var(--text-muted)', transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', display: 'inline-block', transition: 'transform 0.15s' }}>▶</span>
                               </div>
                             </td>
@@ -559,10 +570,8 @@ export default function ReportListPage() {
                         </Fragment>
                       );
                     })}
-
-                    {/* Uncategorised group */}
                     {(() => {
-                      const uncat = filtered.filter(r => !r.categoryId);
+                      const uncat = pagedReports.filter(r => !r.categoryId);
                       if (uncat.length === 0) return null;
                       const isCollapsed = collapsed.includes('uncat');
                       return (
@@ -571,7 +580,6 @@ export default function ReportListPage() {
                             <td colSpan={9} style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Uncategorised</span>
-                                <span style={{ background: 'var(--background)', color: 'var(--text-muted)', padding: '1px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>{uncat.length} reports</span>
                                 <div style={{ flex: 1 }} />
                                 <span style={{ fontSize: 11, color: 'var(--text-muted)', transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', display: 'inline-block' }}>▶</span>
                               </div>
@@ -585,6 +593,14 @@ export default function ReportListPage() {
                 )}
               </tbody>
             </table>
+          </div>
+          {/* Pagination Controls */}
+          <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} of {filtered.length} reports</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button disabled={currentPage === 1} onClick={() => setPage(p => p - 1)} style={{ padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 600 }}>Previous</button>
+              <button disabled={currentPage === pageCount} onClick={() => setPage(p => p + 1)} style={{ padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, cursor: currentPage === pageCount ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 600 }}>Next</button>
+            </div>
           </div>
         </div>
       </div>

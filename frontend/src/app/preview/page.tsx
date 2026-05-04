@@ -7,6 +7,8 @@ import { useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/shared/Sidebar';
 import Topbar from '@/components/shared/Topbar';
 import api from '@/lib/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function PreviewPage() {
   return (
@@ -63,6 +65,10 @@ function PreviewContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
   useEffect(() => { setIsMounted(true); }, []);
 
   useEffect(() => {
@@ -81,14 +87,6 @@ function PreviewContent() {
   }, [selectedReportId, reports]);
 
   async function fetchData(report: any) {
-    const FALLBACK_DATASET = [
-      { id: 1, reference_no: 'REF-001', category: 'Operational', status: 'Pending', amount: 1250.50, date: '2024-03-20', branch: 'Dubai' },
-      { id: 2, reference_no: 'REF-002', category: 'Finance', status: 'Completed', amount: 3400.00, date: '2024-03-21', branch: 'Abu Dhabi' },
-      { id: 3, reference_no: 'REF-003', category: 'HR', status: 'In Review', amount: 890.25, date: '2024-03-22', branch: 'Sharjah' },
-      { id: 4, reference_no: 'REF-004', category: 'Operational', status: 'Pending', amount: 2100.10, date: '2024-03-23', branch: 'Dubai' },
-      { id: 5, reference_no: 'REF-005', category: 'Finance', status: 'Cancelled', amount: 0.00, date: '2024-03-24', branch: 'Ajman' },
-    ];
-
     if (!report?.endpoint) { setPreviewData([]); return; }
     setIsLoading(true);
     setPreviewData([]);
@@ -97,24 +95,14 @@ function PreviewContent() {
         parameters: {},
       });
       
-      let data = Array.isArray(res.data) ? res.data : 
+      const data = Array.isArray(res.data) ? res.data : 
                  (res.data?.data && Array.isArray(res.data.data)) ? res.data.data :
                  (res.data?.results && Array.isArray(res.data.results)) ? res.data.results : [];
-
-      const isApi137 = (report.endpoint || '').includes('137');
-      if (data.length === 0 && !isApi137) {
-        data = FALLBACK_DATASET;
-      }
 
       setPreviewData(data);
     } catch (e) {
       console.error(e); 
-      const isApi137 = (report.endpoint || '').includes('137');
-      if (!isApi137) {
-        setPreviewData(FALLBACK_DATASET);
-      } else {
-        setPreviewData([]);
-      }
+      setPreviewData([]);
     } finally { setIsLoading(false); }
   }
 
@@ -122,6 +110,11 @@ function PreviewContent() {
   const filteredRows = previewData.filter(row =>
     Object.values(row).some(v => String(v).toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredRows.length / (rowsPerPage || 10));
+  const paginatedRows = filteredRows.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+
   const columns = buildColumns(selectedReport, filteredRows[0] ?? previewData[0]);
 
   const saveFile = (blob: Blob, name: string) => {
@@ -158,28 +151,33 @@ function PreviewContent() {
       const rows = filteredRows.map(row => columns.map((c: any) => `"${getCell(row, c).replace(/"/g, '""')}"`).join(','));
       saveFile(new Blob([[hdr, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' }), `${fn}.csv`);
     } else if (fmt === 'pdf') {
-      const s1 = document.createElement('script');
-      s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-      const s2 = document.createElement('script');
-      s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js';
-      s1.onload = () => {
-        document.body.appendChild(s2);
-        s2.onload = () => {
-          const { jsPDF } = (window as any).jspdf;
-          const doc = new jsPDF();
-          doc.text(selectedReport?.name || 'Report', 14, 15);
-          doc.setFontSize(10);
-          doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
-          (doc as any).autoTable({
-            head: [columns.map((c: any) => c.label)],
-            body: filteredRows.map(row => columns.map((c: any) => getCell(row, c))),
-            startY: 30, theme: 'grid',
-            headStyles: { fillColor: [26, 53, 87] },
-          });
-          doc.save(`${fn}.pdf`);
-        };
-      };
-      document.body.appendChild(s1);
+      const doc = new jsPDF();
+      const toggles = selectedReport?.config?.toggles || { header: true, date: true, footer: true };
+      
+      let startY = 15;
+      if (toggles.header !== false) {
+        doc.setFontSize(16);
+        doc.text(selectedReport?.name || 'Report', 14, startY);
+        startY += 7;
+      }
+      
+      if (toggles.date !== false) {
+        doc.setFontSize(10);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, startY);
+        startY += 8;
+      } else {
+        startY += 5;
+      }
+      
+      autoTable(doc, {
+        head: [columns.map((c: any) => c.label)],
+        body: filteredRows.map(row => columns.map((c: any) => getCell(row, c))),
+        startY: startY,
+        theme: 'grid',
+        headStyles: { fillColor: [26, 53, 87] },
+      });
+      
+      doc.save(`${fn}.pdf`);
     }
   }
 
@@ -196,7 +194,7 @@ function PreviewContent() {
         <div style={{ padding: '12px 24px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>Select Template</div>
-            <select value={selectedReportId} onChange={e => { setSelectedReportId(e.target.value); setSearchQuery(''); }}
+            <select value={selectedReportId} onChange={e => { setSelectedReportId(e.target.value); setSearchQuery(''); setCurrentPage(1); }}
               style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, fontWeight: 700, outline: 'none', background: 'var(--background)', minWidth: 220 }}>
               {reports.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
@@ -204,7 +202,7 @@ function PreviewContent() {
           <div style={{ height: 32, width: 1, background: 'var(--border)' }} />
           <div>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>Instant Search</div>
-            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Filter data..."
+            <input value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }} placeholder="Filter data..."
               style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, outline: 'none', background: 'var(--background)', width: 200 }} />
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -224,19 +222,27 @@ function PreviewContent() {
         {/* CONTENT */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 32, background: 'linear-gradient(180deg,var(--background),var(--background))' }}>
           <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24 }}>
-              <div>
-                <h1 style={{ fontSize: 26, fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>{selectedReport?.name || 'Select a Report'}</h1>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4, marginBottom: 0 }}>
-                  System: <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{selectedReport?.database || 'ERP'}</span>
-                  {' • '}Generated: <span style={{ fontWeight: 600 }}>{isMounted ? new Date().toLocaleDateString() : '—'}</span>
-                </p>
+            
+            {/* HEADER AND DATE SECTION */}
+            {(selectedReport?.config?.toggles?.header !== false || selectedReport?.config?.toggles?.date !== false) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24 }}>
+                <div>
+                  {selectedReport?.config?.toggles?.header !== false && (
+                    <h1 style={{ fontSize: 26, fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>{selectedReport?.name || 'Select a Report'}</h1>
+                  )}
+                  {selectedReport?.config?.toggles?.date !== false && (
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4, marginBottom: 0 }}>
+                      System: <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{selectedReport?.database || 'ERP'}</span>
+                      {' • '}Generated: <span style={{ fontWeight: 600 }}>{isMounted ? new Date().toLocaleDateString() : '—'}</span>
+                    </p>
+                  )}
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Records</div>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--primary)' }}>{filteredRows.length}</div>
+                </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Records</div>
-                <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--primary)' }}>{filteredRows.length}</div>
-              </div>
-            </div>
+            )}
 
             <div style={{ background: 'var(--surface)', borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.05)', border: '1px solid var(--border)' }}>
               {isLoading ? (
@@ -262,7 +268,7 @@ function PreviewContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredRows.map((row, i) => (
+                      {paginatedRows.map((row, i) => (
                         <tr key={i} style={{ borderBottom: '1px solid var(--background)', background: i % 2 === 1 ? 'var(--background)' : 'var(--surface)' }}>
                           {columns.map((col: any) => (
                             <td key={col.id || col.field} style={{ ...tdStyle, textAlign: col.align || 'left' }}>
@@ -275,10 +281,53 @@ function PreviewContent() {
                   </table>
                 </div>
               )}
-              <div style={{ padding: '10px 24px', background: '#1A3557', display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>NAVACLE REPORT SERVICE v2.0</span>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>SECURE CLOUD DATA STREAM</span>
-              </div>
+              
+              {/* PAGINATION CONTROLS */}
+              {!isLoading && filteredRows.length > 0 && (
+                <div style={{ padding: '16px 24px', background: 'var(--surface)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Rows per page:</span>
+                    <select 
+                      value={rowsPerPage} 
+                      onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                      style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--background)', fontSize: 13, fontWeight: 700, cursor: 'pointer', outline: 'none' }}
+                    >
+                      {[5, 10, 15, 20, 50].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 12 }}>
+                      Showing <b>{(currentPage - 1) * rowsPerPage + 1}</b> to <b>{Math.min(currentPage * rowsPerPage, filteredRows.length)}</b> of <b>{filteredRows.length}</b>
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                      disabled={currentPage === 1}
+                      style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid var(--border)', background: currentPage === 1 ? 'var(--background)' : 'var(--surface)', color: currentPage === 1 ? '#CBD5E1' : 'var(--text-primary)', fontSize: 12, fontWeight: 800, cursor: currentPage === 1 ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}
+                    >
+                      PREV
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', padding: '0 12px' }}>
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    <button 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                      disabled={currentPage === totalPages}
+                      style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid var(--border)', background: currentPage === totalPages ? 'var(--background)' : 'var(--surface)', color: currentPage === totalPages ? '#CBD5E1' : 'var(--text-primary)', fontSize: 12, fontWeight: 800, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}
+                    >
+                      NEXT
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* FOOTER SECTION */}
+              {selectedReport?.config?.toggles?.footer !== false && (
+                <div style={{ padding: '10px 24px', background: '#1A3557', display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>NAVACLE REPORT SERVICE v2.0</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>SECURE CLOUD DATA STREAM</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

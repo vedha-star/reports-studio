@@ -22,6 +22,18 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            try {
+              const user = JSON.parse(localStorage.getItem('navacle_user') || '{}');
+              const prefs = user.preferences ? (typeof user.preferences === 'string' ? JSON.parse(user.preferences) : user.preferences) : {};
+              if (prefs.theme === 'dark') document.documentElement.classList.add('dark-theme');
+              if (prefs.animations === false) document.documentElement.classList.add('no-animations');
+            } catch (e) {}
+          })();
+        ` }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

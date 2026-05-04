@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -66,6 +67,8 @@ export default function SchedulesPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mainPage, setMainPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     fetchSchedules();
@@ -76,7 +79,6 @@ export default function SchedulesPage() {
   useEffect(() => {
     const s = searchParams.get('search');
     if (s !== null && s !== search) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearch(s);
     }
   }, [searchParams, search]);
@@ -85,16 +87,11 @@ export default function SchedulesPage() {
     try {
       setLoading(true);
       const res = await api.get('/v1/schedules');
-      if (res.data.length === 0) {
-        setSchedules([
-          { id: '1', report: 'Daily Admission Summary', frequency: 'Daily', cron: '0 8 * * *', time: '08:00', timezone: 'IST', nextRun: 'Tomorrow, 08:00', lastRun: 'Today, 08:00', format: 'xlsx', delivery: 'Email', recipient: 'admissions@navacle.com', status: 'active', successRate: 100, totalRuns: 24, generatedFile: 'Daily_Admission_Summary_2024_04_28.xlsx' },
-          { id: '2', report: 'Student Grade Sheet', frequency: 'Monthly', cron: '0 9 1 * *', time: '09:00', timezone: 'IST', nextRun: '1 May, 09:00', lastRun: '1 Apr, 09:00', format: 'pdf', delivery: 'Storage', recipient: '/academic/grades', status: 'active', successRate: 100, totalRuns: 12, generatedFile: 'Student_Grade_Sheet_2024_04_28.pdf' },
-          { id: '3', report: 'Fee Collection Ledger', frequency: 'Daily', cron: '0 17 * * *', time: '17:00', timezone: 'IST', nextRun: 'Today, 17:00', lastRun: 'Yesterday, 17:00', format: 'xlsx', delivery: 'Email', recipient: 'accounts@navacle.com', status: 'active', successRate: 98, totalRuns: 156, generatedFile: 'Fee_Collection_Ledger_2024_04_28.xlsx' },
-          { id: '4', report: 'My First Test Report', frequency: 'Weekly', cron: '0 10 * * 1', time: '10:00', timezone: 'IST', nextRun: 'Next Monday, 10:00', lastRun: 'Last Monday, 10:00', format: 'xlsx', delivery: 'Email', recipient: 'tester@navacle.com', status: 'active', successRate: 100, totalRuns: 5, generatedFile: 'My_First_Test_Report_2024_04_28.xlsx' },
-        ]);
-      } else {
-        setSchedules(res.data.map((s: any) => ({ ...s, generatedFile: `${(s.reportName || s.report).replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${s.format}` })));
-      }
+      // No fallback - only use dynamic data
+      setSchedules(res.data.map((s: any) => ({ 
+        ...s, 
+        generatedFile: `${(s.reportName || s.report).replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${s.format}` 
+      })));
     } catch (error) {
       console.error('Error fetching schedules:', error);
     } finally {
@@ -105,31 +102,27 @@ export default function SchedulesPage() {
   const fetchReports = async () => {
     try {
       const res = await api.get('/v1/reports');
-      if (res.data.length === 0) {
-        setReports([
-          { id: 's-1', name: 'My First Test Report' },
-          { id: 's-2', name: 'Daily Admission Summary' },
-          { id: 's-3', name: 'Student Grade Sheet' },
-          { id: 's-4', name: 'Fee Collection Ledger' },
-        ]);
-      } else {
-        setReports(res.data);
-      }
+      setReports(res.data || []);
     } catch (error) {
       console.error('Error fetching reports:', error);
     }
   };
 
-  const [drawerRuns, setDrawerRuns] = useState([
-    { num: 24, timestamp: '1 Apr 2026 08:02', trigger: 'Schedule', status: 'success', rows: 1523, duration: '0.42s', size: '48.3 KB' },
-    { num: 23, timestamp: '1 Mar 2026 08:01', trigger: 'Schedule', status: 'success', rows: 1489, duration: '0.39s', size: '46.1 KB' },
-    { num: 22, timestamp: '1 Feb 2026 08:03', trigger: 'Manual', status: 'failed', rows: 0, duration: '—', size: '—' },
-    { num: 21, timestamp: '1 Jan 2026 08:02', trigger: 'Schedule', status: 'success', rows: 1402, duration: '0.41s', size: '44.8 KB' },
-    { num: 20, timestamp: '1 Dec 2025 08:01', trigger: 'Schedule', status: 'success', rows: 1350, duration: '0.38s', size: '43.2 KB' },
-  ]);
+  const [drawerRuns, setDrawerRuns] = useState<any[]>([]);
 
   const normalizedSearch = search.trim().toLowerCase();
+  const today = new Date().toISOString().split('T')[0];
+
   const filtered = schedules.filter(s => {
+    // ONLY TODAY FILTER: Hide previous and future dates
+    const runDate = s.lastRun?.split(',')[0] || '';
+    const isToday = runDate.toLowerCase().includes('today') || runDate.includes(today);
+    
+    // We also show it if it's a 'Daily' schedule as it's relevant to today
+    const isDaily = s.frequency?.toLowerCase() === 'daily';
+    
+    if (!isToday && !isDaily) return false;
+
     if (normalizedSearch) {
       const haystack = `${s.report} ${s.cron} ${s.delivery} ${s.format} ${s.recipient}`.toLowerCase();
       if (!haystack.includes(normalizedSearch)) return false;
@@ -139,6 +132,10 @@ export default function SchedulesPage() {
     if (filterFmt && s.format !== filterFmt) return false;
     return true;
   });
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentMainPage = Math.min(mainPage, pageCount);
+  const pagedSchedules = filtered.slice((currentMainPage - 1) * pageSize, currentMainPage * pageSize);
 
   const toggleSelect = (id: string) => {
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
@@ -165,6 +162,17 @@ export default function SchedulesPage() {
       setShowDeleteConfirm(false);
     } catch (error) {
       console.error('Error deleting schedule:', error);
+    }
+  };
+
+  const handleClearWorkspace = async () => {
+    if (!confirm('Are you sure you want to clear all schedules and run history?')) return;
+    try {
+      await api.post('/v1/reports/bulk-clear-all');
+      await fetchSchedules();
+      alert('Workspace cleared.');
+    } catch (error) {
+      console.error('Failed to clear workspace:', error);
     }
   };
 
@@ -345,6 +353,8 @@ export default function SchedulesPage() {
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Automate report delivery via cron schedules</div>
             </div>
             <div style={{ flex: 1 }} />
+            <button onClick={handleClearWorkspace}
+              style={{ padding: '5px 12px', border: '1px solid #FECACA', background: '#FEF2F2', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#DC2626' }}>🗑️ Clear Workspace</button>
             <button style={{ padding: '5px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--text-primary)' }}>⬇ Export</button>
             <button onClick={() => { setShowModal(true); setModalTab('basic'); }}
               style={{ padding: '5px 12px', border: 'none', borderRadius: 8, background: 'var(--primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--surface)' }}>+ New Schedule</button>
@@ -387,6 +397,17 @@ export default function SchedulesPage() {
               <option value="">All formats</option>
               <option>xlsx</option><option>csv</option><option>pdf</option>
             </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginLeft: 12 }}>
+              <span>Rows:</span>
+              <select 
+                value={pageSize} 
+                onChange={e => { setPageSize(Number(e.target.value)); setMainPage(1); }}
+                style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 11, outline: 'none', cursor: 'pointer', fontWeight: 800 }}>
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+              </select>
+            </div>
             <div style={{ flex: 1 }} />
             {selected.length > 0 && (
               <div style={{ display: 'flex', gap: 6 }}>
@@ -410,7 +431,7 @@ export default function SchedulesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((s, i) => (
+                {pagedSchedules.map((s, i) => (
                   <tr key={s.id} style={{ background: selected.includes(s.id) ? 'var(--primary-light)' : 'transparent' }}
                     onMouseEnter={e => { if (!selected.includes(s.id)) e.currentTarget.style.background = 'var(--background)'; }}
                     onMouseLeave={e => { if (!selected.includes(s.id)) e.currentTarget.style.background = 'transparent'; }}>
@@ -477,7 +498,11 @@ export default function SchedulesPage() {
 
           {/* Pagination info */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Showing 1–{filtered.length} of {filtered.length} schedules</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Showing {(currentMainPage - 1) * pageSize + 1}–{Math.min(currentMainPage * pageSize, filtered.length)} of {filtered.length} schedules</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button disabled={currentMainPage === 1} onClick={() => setMainPage(p => p - 1)} style={{ padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, cursor: currentMainPage === 1 ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 600 }}>Previous</button>
+              <button disabled={currentMainPage === pageCount} onClick={() => setMainPage(p => p + 1)} style={{ padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, cursor: currentMainPage === pageCount ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 600 }}>Next</button>
+            </div>
           </div>
 
         </div>
@@ -818,14 +843,14 @@ export default function SchedulesPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
                   <tr>
-                    {['#', 'Timestamp', 'Triggered By', 'Status', 'Rows', 'Duration', 'File Size', 'Actions'].map(h => (
+                    {['#', 'Timestamp', 'Triggered By', 'Status', 'Rows', 'Duration', 'File Size'].map(h => (
                       <th key={h} style={{ background: 'var(--background)', padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {visibleDrawerRuns.map((run, i) => (
-                    <tr key={run.num} style={{ background: i % 2 === 1 ? 'var(--background)' : 'var(--surface)' }}>
+                    <tr key={`${run.num}-${run.timestamp}`} style={{ background: i % 2 === 1 ? 'var(--background)' : 'var(--surface)' }}>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontWeight: 700, color: 'var(--text-primary)' }}>{run.num}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{run.timestamp}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>{run.trigger}</td>
@@ -837,17 +862,7 @@ export default function SchedulesPage() {
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{run.rows.toLocaleString()}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{run.duration}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{run.size}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          {run.status === 'success' && (
-                            <button style={{ padding: '2px 7px', background: 'var(--primary-light)', color: 'var(--primary)', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>⬇</button>
-                          )}
-                          {run.status === 'failed' && (
-                            <button style={{ padding: '2px 7px', background: '#FEF2F2', color: '#DC2626', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>Error</button>
-                          )}
-                          <button style={{ padding: '2px 7px', background: 'var(--background)', color: 'var(--text-primary)', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>▶ Re-run</button>
-                        </div>
-                      </td>
+
                     </tr>
                   ))}
                 </tbody>

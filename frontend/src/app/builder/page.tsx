@@ -29,8 +29,10 @@ function BuilderContent() {
   const [reportName, setReportName] = useState('');
   const [slug, setSlug] = useState('');
   const [testDone, setTestDone] = useState(false);
+  const [nameTouched, setNameTouched] = useState(false);
+  const [showNameError, setShowNameError] = useState(false);
    
-  const [testData, setTestData] = useState<any[]>([]);
+  const [, setTestData] = useState<any[]>([]);
   const [columns, setColumns] = useState<any[]>([]);
   const [params, setParams] = useState<any[]>([{ name: 'tenantId', value: '1', type: 'string' }]);
   const [filters, setFilters] = useState<any[]>([]);
@@ -92,32 +94,15 @@ function BuilderContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const FALLBACK_DATASET = [
-    { id: 1, reference_no: 'REF-001', category: 'Operational', status: 'Pending', amount: 1250.50, date: '2024-03-20', branch: 'Dubai' },
-    { id: 2, reference_no: 'REF-002', category: 'Finance', status: 'Completed', amount: 3400.00, date: '2024-03-21', branch: 'Abu Dhabi' },
-    { id: 3, reference_no: 'REF-003', category: 'HR', status: 'In Review', amount: 890.25, date: '2024-03-22', branch: 'Sharjah' },
-    { id: 4, reference_no: 'REF-004', category: 'Operational', status: 'Pending', amount: 2100.10, date: '2024-03-23', branch: 'Dubai' },
-    { id: 5, reference_no: 'REF-005', category: 'Finance', status: 'Cancelled', amount: 0.00, date: '2024-03-24', branch: 'Ajman' },
-  ];
-
   const handleTestQuery = async () => {
     if (!endpoint) return;
     try {
       setTestDone(false);
       const res = await api.post(`/v1/reports/dynamic/execute/${endpoint}`, { parameters: {}, dbCode });
       
-      // Unwrap data from common API response formats
-      let data = Array.isArray(res.data) ? res.data : 
+      const data = Array.isArray(res.data) ? res.data : 
                  (res.data?.data && Array.isArray(res.data.data)) ? res.data.data :
                  (res.data?.results && Array.isArray(res.data.results)) ? res.data.results : [];
-
-      // Special handling for API 137 or empty datasets
-      const isApi137 = endpoint.includes('137');
-      
-      if (data.length === 0 && !isApi137) {
-        data = FALLBACK_DATASET;
-        showToast('Using sample dataset for configuration', 'success');
-      }
 
       setTestData(data);
       
@@ -134,27 +119,13 @@ function BuilderContent() {
         })));
       }
       
-      if (data.length > 0 || isApi137) {
+      if (data.length > 0) {
         setTestDone(true);
       } else {
         showToast('Endpoint returned no data.', 'error');
       }
     } catch {
-      // If NOT API 137, we can still use fallback even on error to allow UI configuration
-      if (!endpoint.includes('137')) {
-        setTestData(FALLBACK_DATASET);
-        if (columns.length === 0) {
-          setColumns(Object.keys(FALLBACK_DATASET[0]).map((k, i) => ({
-            id: String(i + 1), field: k, label: k.replace(/_/g, ' ').toUpperCase(),
-            type: typeof (FALLBACK_DATASET[0] as any)[k] === 'number' ? 'number' : 'string',
-            fmt: '', align: typeof (FALLBACK_DATASET[0] as any)[k] === 'number' ? 'right' : 'left', vis: true
-          })));
-        }
-        setTestDone(true);
-        showToast('Connection failed. Using fallback dataset for setup.', 'success');
-      } else {
-        showToast('Connection failed for API 137. Please check backend logs.', 'error');
-      }
+      showToast('Connection failed. Please check backend logs.', 'error');
     }
   };
 
@@ -167,18 +138,18 @@ function BuilderContent() {
         endpoint,
         format: 'xlsx',
         status: status,
-        categoryId: selectedCategoryId || null,
+        categoryId: status === 'draft' ? null : (selectedCategoryId || null),
         columnMap: columns,
         parameters: params,
         filters,
         config: { toggles, orientation, sorts },
         isPublic
       };
-      if (reportId) await api.put(`/v1/reports/${reportId}`, payload);
-      else await api.post('/v1/reports', payload);
+      const res = reportId ? await api.put(`/v1/reports/${reportId}`, payload) : await api.post('/v1/reports', payload);
+      const savedId = reportId || res.data.id;
       
       showToast(status === 'draft' ? 'Draft saved securely! 💾' : 'Report published successfully! 🚀', 'success');
-      setTimeout(() => router.push('/reports'), 1500);
+      setTimeout(() => router.push(`/preview?id=${savedId}`), 1500);
     } catch (err: any) { 
       console.error('FULL SAVE ERROR:', err);
       if (err.response) console.error('ERROR RESPONSE DATA:', err.response.data);
@@ -292,7 +263,7 @@ function BuilderContent() {
             <div style={{ width: '100%', maxWidth: 800, animation: 'fadeIn 0.4s ease' }}>
 
               {step === 1 && (
-                <div style={{ animation: 'slideUp 0.4s ease', textAlign: 'center' }}>
+                <div style={{ animation: 'fadeIn 0.4s ease', textAlign: 'center' }}>
                   <h2 style={{ fontSize: 32, fontWeight: 800, marginBottom: 12, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Intelligence Hub</h2>
                   <p style={{ fontSize: 16, color: 'var(--text-muted)', marginBottom: 40, fontWeight: 400 }}>Select a data source endpoint to begin structuring your report.</p>
                   
@@ -424,7 +395,7 @@ function BuilderContent() {
                     </div>
                   </div>
                   
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
                     <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
                       <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -463,51 +434,33 @@ function BuilderContent() {
                         </table>
                       </div>
                     </div>
-
-                    {/* LIVE PREVIEW SIDEBAR */}
-                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 24, padding: 24, height: 'fit-content', position: 'sticky', top: 24 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 12, background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>👁️</div>
-                        <div style={{ fontSize: 15, fontWeight: 800 }}>Live Data Grid</div>
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.6 }}>This preview updates as you rename columns or toggle visibility.</div>
-                      
-                      <div style={{ border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', background: 'var(--background)' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                          <thead style={{ background: 'var(--surface)' }}>
-                            <tr>
-                              {columns.filter(c => c.vis).slice(0, 3).map(c => (
-                                <th key={c.id} style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', textAlign: c.align as any, fontWeight: 800, color: 'var(--text-muted)' }}>{c.label}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {testData.slice(0, 4).map((row, i) => (
-                              <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                                {columns.filter(c => c.vis).slice(0, 3).map(c => (
-                                  <td key={c.id} style={{ padding: '10px 14px', textAlign: c.align as any, color: 'var(--text-primary)', fontWeight: 500 }}>{String(row[c.field] || '-')}</td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      <div style={{ marginTop: 16, fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic' }}>Showing top 3 columns & 4 records</div>
-                    </div>
                   </div>
                 </div>
               )}
 
               {step === 3 && (
-                <div style={{ animation: 'slideUp 0.4s ease' }}>
+                <div style={{ animation: 'fadeIn 0.3s ease' }}>
                   <h2 style={{ fontSize: 32, fontWeight: 800, marginBottom: 12, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Global Settings</h2>
                   <p style={{ fontSize: 16, color: 'var(--text-muted)', marginBottom: 32 }}>Give your report a name and place it in a category.</p>
                   
                   <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 32 }}>
                     <div>
-                      <label style={labelStyle}>Report Name</label>
-                      <input value={reportName} onChange={e => { setReportName(e.target.value); setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-')); }} 
-                        placeholder="e.g. Master Student Records" style={inputStyle} />
+                      <label style={labelStyle}>Report Name <span style={{ color: '#EF4444' }}>*</span></label>
+                      <input 
+                        value={reportName} 
+                        onChange={e => { 
+                          const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                          setReportName(val); 
+                          setSlug(val.toLowerCase().trim().replace(/\s+/g, '-')); 
+                          if (val) setShowNameError(false);
+                        }} 
+                        onBlur={() => setNameTouched(true)}
+                        placeholder="e.g. Master Student Records" 
+                        style={{ ...inputStyle, borderColor: ((nameTouched || showNameError) && !reportName) ? '#EF4444' : 'var(--border)' }} 
+                      />
+                      {((nameTouched || showNameError) && !reportName) && (
+                        <div style={{ fontSize: 11, color: '#EF4444', fontWeight: 700, marginTop: 4 }}>⚠ Report name is required to proceed.</div>
+                      )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                       <div>
@@ -525,6 +478,8 @@ function BuilderContent() {
                         </select>
                       </div>
                     </div>
+
+                    {/* SORTING REMOVED FROM STEP 3 - HANDLED IN STEP 4 */}
                     <div style={{ padding: '24px', background: 'var(--background)', borderRadius: 16, border: '1px solid var(--border)' }}>
                       <label style={{ ...labelStyle, marginBottom: 16, color: 'var(--text-primary)' }}>Visual Components</label>
                       <div style={{ display: 'flex', gap: 32 }}>
@@ -623,56 +578,6 @@ function BuilderContent() {
                     <button onClick={() => setSorts([...sorts, { field: '', dir: 'asc' }])} style={{ padding: '7px 14px', background: 'var(--primary-light)', color: 'var(--primary)', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: 'pointer', marginTop: 8, boxShadow: '0 2px 4px rgba(79,70,229,0.1)' }}>+ Add Sort Rule</button>
                   </div>
 
-                   {/* DEFAULT FILTERS */}
-                   <div style={{ marginBottom: 12 }}>
-                     <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12 }}>Advanced Filter Studio</div>
-                     <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.5fr 40px', gap: 16, marginBottom: 8, fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                       <div>FIELD</div>
-                       <div>OPERATOR</div>
-                       <div>VALUE</div>
-                       <div></div>
-                     </div>
-                     
-                     {filters.map((f: any, i: number) => (
-                       <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.5fr 40px', gap: 16, marginBottom: 12, alignItems: 'center' }}>
-                         <select value={f.field} onChange={(e: any) => setFilters(filters.map((x: any, j: number) => j === i ? { ...x, field: e.target.value } : x))} style={{ ...inputStyle, padding: '10px 14px' }}>
-                           <option value="">Select Field...</option>
-                           {columns.map((c: any) => <option key={c.field} value={c.field}>{c.label}</option>)}
-                         </select>
-                         <select value={f.operator} onChange={(e: any) => setFilters(filters.map((x: any, j: number) => j === i ? { ...x, operator: e.target.value } : x))} style={{ ...inputStyle, padding: '10px 14px' }}>
-                           <option value="equals">equals</option>
-                           <option value="contains">contains</option>
-                           <option value="gt">greater than</option>
-                           <option value="lt">less than</option>
-                           <option value="not_equal">not equal</option>
-                         </select>
-                         <input value={f.value} onChange={(e: any) => setFilters(filters.map((x: any, j: number) => j === i ? { ...x, value: e.target.value } : x))} style={{ ...inputStyle, padding: '10px 14px' }} placeholder="Filter value..." />
-                         <button onClick={() => setFilters(filters.filter((_: any, j: number) => j !== i))} style={{ border: 'none', background: 'transparent', color: '#94A3B8', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="hover-btn">✕</button>
-                       </div>
-                     ))}
-                     <button onClick={() => setFilters([...filters, { field: '', operator: 'equals', value: '' }])} style={{ padding: '7px 14px', background: 'var(--primary-light)', color: 'var(--primary)', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: 'pointer', marginTop: 8, boxShadow: '0 2px 4px rgba(79,70,229,0.1)' }}>+ Add Logic Filter</button>
-                   </div>
-                  <div style={{ marginBottom: 32 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12 }}>Default Filters (search mode)</div>
-                    {filters.map((f: any, i: number) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 3fr 40px', gap: 16, marginBottom: 12, alignItems: 'center' }}>
-                        <select value={f.field} onChange={(e: any) => setFilters(filters.map((x: any, j: number) => j === i ? { ...x, field: e.target.value } : x))} style={{ ...inputStyle, padding: '10px 14px' }}>
-                          <option value="">Select Field...</option>
-                          {columns.map((c: any) => <option key={c.field} value={c.field}>{c.label}</option>)}
-                        </select>
-                        <select value={f.operator} onChange={(e: any) => setFilters(filters.map((x: any, j: number) => j === i ? { ...x, operator: e.target.value } : x))} style={{ ...inputStyle, padding: '10px 14px' }}>
-                          <option value="eq">eq</option>
-                          <option value="contains">contains</option>
-                          <option value="gt">gt</option>
-                          <option value="lt">lt</option>
-                        </select>
-                        <input value={f.value} onChange={(e: any) => setFilters(filters.map((x: any, j: number) => j === i ? { ...x, value: e.target.value } : x))} style={{ ...inputStyle, padding: '10px 14px' }} placeholder="Value..." />
-                        <button onClick={() => setFilters(filters.filter((_: any, j: number) => j !== i))} style={{ border: 'none', background: 'transparent', color: '#94A3B8', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="hover-btn">✕</button>
-                      </div>
-                    ))}
-                    <button onClick={() => setFilters([...filters, { field: '', operator: 'eq', value: '' }])} style={{ padding: '6px 12px', background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', marginTop: 8 }}>+ Add Filter</button>
-                  </div>
-
                   <div style={{ display: 'flex', alignItems: 'center', marginTop: 40, paddingTop: 24, borderTop: '1px solid var(--border)' }}>
                     <button onClick={() => setStep((s: number) => (s - 1) as Step)} style={{ padding: '8px 16px', background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>← Back</button>
                     <div style={{ flex: 1 }} />
@@ -689,7 +594,27 @@ function BuilderContent() {
                 <div style={{ display: 'flex', gap: 16, marginTop: 40, padding: '32px 0', borderTop: '1px solid var(--border)' }}>
                   {step > 1 && <button onClick={() => setStep((s: number) => (s - 1) as Step)} style={{ padding: '12px 24px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }} className="hover-btn">← Back</button>}
                   <div style={{ flex: 1 }} />
-                  <button disabled={step === 1 && !testDone} onClick={() => setStep((s: number) => (s + 1) as Step)} style={{ padding: '12px 32px', background: (step === 1 && !testDone) ? 'var(--border)' : 'var(--primary)', color: (step === 1 && !testDone) ? 'var(--text-muted)' : 'var(--surface)', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: (step === 1 && !testDone) ? 'not-allowed' : 'pointer', boxShadow: (step === 1 && !testDone) ? 'none' : '0 4px 6px -1px rgba(79, 70, 229, 0.2)', transition: 'all 0.2s' }} className="primary-btn">{step === 1 ? 'Proceed to Mapping →' : 'Next Step →'}</button>
+                  <button 
+                    onClick={() => {
+                      if (step === 3 && !reportName) {
+                        setShowNameError(true);
+                        return;
+                      }
+                      setStep((s: number) => (s + 1) as Step);
+                    }} 
+                    style={{ 
+                      padding: '12px 32px', 
+                      background: (step === 1 && !testDone) ? 'var(--border)' : 'var(--primary)', 
+                      color: (step === 1 && !testDone) ? 'var(--text-muted)' : 'var(--surface)', 
+                      border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, 
+                      cursor: (step === 1 && !testDone) ? 'not-allowed' : 'pointer', 
+                      boxShadow: (step === 1 && !testDone) ? 'none' : '0 4px 6px -1px rgba(79, 70, 229, 0.2)', 
+                      transition: 'all 0.2s' 
+                    }} 
+                    disabled={step === 1 && !testDone}
+                    className="primary-btn">
+                    {step === 1 ? 'Proceed to Mapping →' : 'Next Step →'}
+                  </button>
                 </div>
               )}
               

@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "reports": [
+    {
+      "name": "Admission Statistics 2026",
+      "slug": "admission-stats-2026",
+      "description": "Weekly tracking of new admissions across all branches",
+      "format": "xlsx",
+      "database": "ERP",
+      "status": "active",
+      "columnMap": [
+        { "source": "branch_name", "label": "Branch" },
+        { "source": "student_count", "label": "Total Students" }
+      ],
+      "parameters": [],
+      "filters": [],
+      "config": { "theme": "corporate" }
+    },
+    {
+      "name": "Fee Collection Summary",
+      "slug": "fee-collection-summary",
+      "description": "Daily summary of fee collections by mode of payment",
+      "format": "pdf",
+      "database": "Finance",
+      "status": "active",
+      "columnMap": [
+        { "source": "payment_mode", "label": "Mode" },
+        { "source": "total_amount", "label": "Amount" }
+      ],
+      "parameters": [],
+      "filters": [],
+      "config": { "orientation": "portrait" }
+    }
+  ]
+}

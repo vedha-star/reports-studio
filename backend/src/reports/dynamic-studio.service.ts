@@ -7,7 +7,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios, { AxiosRequestConfig } from 'axios';
 
-interface RawEndpoint {
+export interface RawEndpoint {
   slug?: string;
   name?: string;
   endPoint?: string;

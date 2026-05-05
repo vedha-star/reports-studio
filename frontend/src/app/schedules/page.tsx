@@ -114,15 +114,8 @@ export default function SchedulesPage() {
   const today = new Date().toISOString().split('T')[0];
 
   const filtered = schedules.filter(s => {
-    // ONLY TODAY FILTER: Hide previous and future dates
-    const runDate = s.lastRun?.split(',')[0] || '';
-    const isToday = runDate.toLowerCase().includes('today') || runDate.includes(today);
+    // Show all schedules by default regardless of run date or frequency
     
-    // We also show it if it's a 'Daily' schedule as it's relevant to today
-    const isDaily = s.frequency?.toLowerCase() === 'daily';
-    
-    if (!isToday && !isDaily) return false;
-
     if (normalizedSearch) {
       const haystack = `${s.report} ${s.cron} ${s.delivery} ${s.format} ${s.recipient}`.toLowerCase();
       if (!haystack.includes(normalizedSearch)) return false;

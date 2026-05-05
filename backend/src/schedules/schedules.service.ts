@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { DynamicStudioService } from '../reports/dynamic-studio.service';
+import axios from 'axios';
 
 @Injectable()
 export class SchedulesService implements OnModuleInit {
@@ -67,6 +68,23 @@ export class SchedulesService implements OnModuleInit {
               userId: (sched as any).userId,
             } as any,
           });
+
+          // WEBHOOK DELIVERY LOGIC
+          if (sched.delivery === 'Webhook' && sched.recipient) {
+            this.logger.log(`Triggering Webhook for ${sched.reportName} -> ${sched.recipient}`);
+            try {
+              await axios.post(sched.recipient, {
+                reportName: sched.reportName,
+                status: 'success',
+                timestamp: new Date().toISOString(),
+                rowCount: Array.isArray(data) ? data.length : 0,
+                data: data // Sending the actual report data
+              });
+              this.logger.log(`Webhook sent successfully to ${sched.recipient}`);
+            } catch (webhookError: any) {
+              this.logger.error(`Webhook failed for ${sched.recipient}: ${webhookError.message}`);
+            }
+          }
         } catch (err: any) {
           this.logger.error(
             `Scheduled Job Failed: ${sched.reportName}`,

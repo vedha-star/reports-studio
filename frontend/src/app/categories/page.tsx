@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/shared/Sidebar';
 import Topbar from '@/components/shared/Topbar';
@@ -42,7 +42,7 @@ const getFmtStyle = (format: string) => {
   return fmtColor[f] || fmtColor.xlsx;
 };
 
-export default function CategoriesPage() {
+function CategoriesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -315,7 +315,7 @@ export default function CategoriesPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 240px', gap: 20, marginBottom: 20 }}>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 20, display: 'flex', gap: 16, alignItems: 'center' }}>
-                <span style={{ width: 60, height: 60, borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', background: selectedCategory?.color || 'var(--primary)', color: selectedCategory?.textColor || 'var(--surface)', fontSize: 28 }}>{selectedCategory?.icon || '??'}</span>
+                <span style={{ width: 60, height: 60, borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', background: selectedCategory?.color || 'var(--primary)', color: selectedCategory?.textColor || 'var(--surface)', fontSize: 28 }}>{selectedCategory?.icon || '📁'}</span>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{selectedCategory?.name || 'No folder selected'}</div>
@@ -392,10 +392,10 @@ export default function CategoriesPage() {
                 {pagedReports.map(report => (
                   <div key={report.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 14, border: '1px solid var(--border)', background: 'var(--background)' }}>
                     <div style={{ display: 'flex', gap: 14, alignItems: 'center', minWidth: 0 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{selectedCategory?.icon || '??'}</div>
+                      <div style={{ width: 44, height: 44, borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{selectedCategory?.icon || '📁'}</div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{report.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>{report.slug} � {report.endpoint}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>{report.slug} • {report.endpoint}</div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -403,11 +403,11 @@ export default function CategoriesPage() {
                       <span style={{ background: report.status === 'active' ? '#DCFCE7' : 'var(--background)', color: report.status === 'active' ? '#166534' : 'var(--text-muted)', padding: '5px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{report.status}</span>
                       <button onClick={handleRun}
                         style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                        ? Run
+                        🚀 Run
                       </button>
                       <button onClick={handleEditReport}
                         style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                        ?? Edit
+                        ✏️ Edit
                       </button>
                     </div>
                   </div>
@@ -516,5 +516,13 @@ export default function CategoriesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CategoriesPage() {
+  return (
+    <Suspense fallback={<div>Loading folders...</div>}>
+      <CategoriesContent />
+    </Suspense>
   );
 }

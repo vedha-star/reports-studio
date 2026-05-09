@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/shared/Sidebar';
 import Topbar from '@/components/shared/Topbar';
@@ -34,7 +34,7 @@ interface Report {
   format?: string;
 }
 
-export default function SchedulesPage() {
+function SchedulesContent() {
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [filterStatus, setFilterStatus] = useState('');
@@ -87,7 +87,6 @@ export default function SchedulesPage() {
     try {
       setLoading(true);
       const res = await api.get('/v1/schedules');
-      // No fallback - only use dynamic data
       setSchedules(res.data.map((s: any) => ({ 
         ...s, 
         generatedFile: `${(s.reportName || s.report).replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${s.format}` 
@@ -111,11 +110,8 @@ export default function SchedulesPage() {
   const [drawerRuns, setDrawerRuns] = useState<any[]>([]);
 
   const normalizedSearch = search.trim().toLowerCase();
-  const today = new Date().toISOString().split('T')[0];
 
   const filtered = schedules.filter(s => {
-    // Show all schedules by default regardless of run date or frequency
-    
     if (normalizedSearch) {
       const haystack = `${s.report} ${s.cron} ${s.delivery} ${s.format} ${s.recipient}`.toLowerCase();
       if (!haystack.includes(normalizedSearch)) return false;
@@ -225,7 +221,6 @@ export default function SchedulesPage() {
     setRunPage(page);
   };
 
-  // Auto-generate cron expression whenever frequency fields change
   const buildCron = (newFreq: string, newTime: string, newWeekDay: string, newMonthDay: string, newMonth: string) => {
     const [hh, mm] = newTime.split(':');
     const h = parseInt(hh, 10);
@@ -325,11 +320,6 @@ export default function SchedulesPage() {
     Email: '📧', Webhook: '🔗', Storage: '💾',
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const inputStyle = { width: '100%', padding: '6px 9px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12,  outline: 'none', background: 'var(--surface)' };
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const labelStyle = { fontSize: 11, fontWeight: 600 as const, color: 'var(--text-primary)', marginBottom: 4 };
-
   return (
     <div style={{ display: 'flex', height: '100vh', fontSize: 13, color: 'var(--text-primary)', background: 'var(--background)' }}>
       <Sidebar />
@@ -353,7 +343,7 @@ export default function SchedulesPage() {
               style={{ padding: '5px 12px', border: 'none', borderRadius: 8, background: 'var(--primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--surface)' }}>+ New Schedule</button>
           </div>
 
-          {/* STAT CARDS — PRD Section 6.1 */}
+          {/* STAT CARDS */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
             {[
               { label: 'Total Schedules', val: schedules.length.toString(), sub: `across ${new Set(schedules.map(s => s.report)).size} reports`, color: 'var(--text-primary)' },
@@ -410,7 +400,7 @@ export default function SchedulesPage() {
             )}
           </div>
 
-          {/* TABLE — PRD Section 6.2 */}
+          {/* TABLE */}
           <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -487,8 +477,6 @@ export default function SchedulesPage() {
             )}
           </div>
 
-          {/* GENERATED REPORTS LIST SECTION REMOVED AS PER USER REQUEST TO KEEP MAIN TABLE CLEAN AND REFLECTED IN COLUMNS */}
-
           {/* Pagination info */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Showing {(currentMainPage - 1) * pageSize + 1}–{Math.min(currentMainPage * pageSize, filtered.length)} of {filtered.length} schedules</span>
@@ -507,7 +495,6 @@ export default function SchedulesPage() {
           onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
           <div style={{ background: 'var(--surface)', borderRadius: 24, width: 680, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1)' }}>
             
-            {/* Modal Header */}
             <div style={{ padding: '24px 32px', background: 'linear-gradient(135deg, var(--primary-light), var(--surface))', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div>
                 <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--primary-dark)' }}>New Schedule</div>
@@ -517,7 +504,6 @@ export default function SchedulesPage() {
                 style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 900, boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>✕</button>
             </div>
 
-            {/* Modal Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface)', padding: '0 32px', flexShrink: 0 }}>
               {[{ id: 'basic', label: '⚙ Basic' }, { id: 'delivery', label: '📤 Delivery' }, { id: 'params', label: '⚡ Parameters' }].map(tab => (
                 <div key={tab.id} onClick={() => setModalTab(tab.id)}
@@ -527,10 +513,8 @@ export default function SchedulesPage() {
               ))}
             </div>
 
-            {/* Modal Body */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
 
-              {/* Basic Tab */}
               {modalTab === 'basic' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -567,7 +551,6 @@ export default function SchedulesPage() {
                       ))}
                     </div>
 
-                    {/* DAILY — just a time picker */}
                     {freq === 'daily' && (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
                         <div>
@@ -577,7 +560,6 @@ export default function SchedulesPage() {
                       </div>
                     )}
 
-                    {/* WEEKLY — day of week + time */}
                     {freq === 'weekly' && (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                         <div>
@@ -593,7 +575,6 @@ export default function SchedulesPage() {
                       </div>
                     )}
 
-                    {/* MONTHLY — day of month + time */}
                     {freq === 'monthly' && (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                         <div>
@@ -609,7 +590,6 @@ export default function SchedulesPage() {
                       </div>
                     )}
 
-                    {/* YEARLY — month + day + time */}
                     {freq === 'yearly' && (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
                         <div>
@@ -631,7 +611,6 @@ export default function SchedulesPage() {
                       </div>
                     )}
 
-                    {/* Human-readable summary + generated cron */}
                     <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--primary-light)', borderRadius: 10, border: '1px solid var(--primary)' }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-dark)', marginBottom: 4 }}>{freqHumanDescription()}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>Cron: <span style={{ color: 'var(--primary)' }}>{cron}</span></div>
@@ -662,7 +641,6 @@ export default function SchedulesPage() {
                 </div>
               )}
 
-              {/* Delivery Tab */}
               {modalTab === 'delivery' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                   <div>
@@ -724,7 +702,6 @@ export default function SchedulesPage() {
                 </div>
               )}
 
-              {/* Parameters Tab */}
               {modalTab === 'params' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   <div style={{ background: 'var(--primary-light)', border: '1px solid var(--primary)', borderRadius: 12, padding: '16px', fontSize: 13, color: 'var(--primary-dark)', fontWeight: 600 }}>
@@ -749,7 +726,6 @@ export default function SchedulesPage() {
               )}
             </div>
 
-            {/* Modal Footer */}
             <div style={{ padding: '20px 32px', background: 'var(--background)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12, flexShrink: 0 }}>
               <button onClick={() => setShowModal(false)}
                 style={{ padding: '12px 24px', borderRadius: 12, border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
@@ -765,13 +741,11 @@ export default function SchedulesPage() {
         </div>
       )}
 
-      {/* LAST RUNS DRAWER — PRD Section 6.4 */}
       {showDrawer && drawerSchedule && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 400, display: 'flex', justifyContent: 'flex-end' }}
           onClick={e => { if (e.target === e.currentTarget) setShowDrawer(false); }}>
           <div style={{ width: 640, height: '100%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 32px rgba(0,0,0,0.12)' }}>
 
-            {/* Drawer Header */}
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 12, flexShrink: 0 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>{drawerSchedule.report}</div>
@@ -787,7 +761,6 @@ export default function SchedulesPage() {
               </div>
             </div>
 
-            {/* Summary Band */}
             <div style={{ padding: '12px 20px', background: 'var(--background)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 20, flexShrink: 0, flexWrap: 'wrap' }}>
               {[
                 { label: 'Next Run', val: drawerSchedule.nextRun },
@@ -798,115 +771,93 @@ export default function SchedulesPage() {
               ].map(item => (
                 <div key={item.label}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{item.label}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>{item.val}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>{item.val}</div>
                 </div>
               ))}
             </div>
 
-            {/* Stats Strip */}
-            <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16, flexShrink: 0 }}>
-              {[
-                { label: 'Total Runs', val: drawerSchedule.totalRuns.toString(), color: 'var(--text-primary)' },
-                { label: 'Success', val: Math.round(drawerSchedule.totalRuns * drawerSchedule.successRate / 100).toString(), color: 'var(--accent)' },
-                { label: 'Failed', val: Math.round(drawerSchedule.totalRuns * (100 - drawerSchedule.successRate) / 100).toString(), color: '#DC2626' },
-                { label: 'Avg Duration', val: '0.41s', color: 'var(--text-primary)' },
-                { label: 'Last Status', val: '✓ Success', color: 'var(--accent)' },
-              ].map(s => (
-                <div key={s.label} style={{ flex: 1 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: s.color === 'var(--text-primary)' ? 'var(--text-muted)' : s.color, textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.label}</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: s.color, marginTop: 2 }}>{s.val}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Filter Bar */}
-            <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
-              <input type="search" value={runSearch} onChange={e => { setRunSearch(e.target.value); setRunPage(1); }} placeholder="Search runs…"
-                style={{ width: 180, fontSize: 11, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 6,  outline: 'none' }} />
-              <select value={runFilterStatus} onChange={e => { setRunFilterStatus(e.target.value); setRunPage(1); }}
-                style={{ width: 120, fontSize: 11, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 6,  outline: 'none' }}>
-                <option value="">All statuses</option>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontWeight: 800, fontSize: 13 }}>Run History</div>
+              <div style={{ flex: 1 }} />
+              <input value={runSearch} onChange={e => setRunSearch(e.target.value)} placeholder="Filter runs..." style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 11, width: 140 }} />
+              <select value={runFilterStatus} onChange={e => setRunFilterStatus(e.target.value)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 11 }}>
+                <option value="">Status</option>
                 <option value="success">Success</option>
                 <option value="failed">Failed</option>
               </select>
             </div>
 
-            {/* Runs Table */}
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--surface)' }}>
                   <tr>
-                    {['#', 'Timestamp', 'Triggered By', 'Status', 'Rows', 'Duration', 'File Size'].map(h => (
-                      <th key={h} style={{ background: 'var(--background)', padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                    {['#', 'Timestamp', 'Trigger', 'Status', 'Rows', 'Duration', 'Size'].map(h => (
+                      <th key={h} style={{ padding: '10px 20px', textAlign: 'left', borderBottom: '1px solid var(--border)', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {visibleDrawerRuns.map((run, i) => (
-                    <tr key={`${run.num}-${run.timestamp}`} style={{ background: i % 2 === 1 ? 'var(--background)' : 'var(--surface)' }}>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontWeight: 700, color: 'var(--text-primary)' }}>{run.num}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{run.timestamp}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>{run.trigger}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
-                        <span style={{ background: run.status === 'success' ? '#DCFCE7' : '#FEE2E2', color: run.status === 'success' ? '#166534' : '#991B1B', padding: '2px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
-                          {run.status === 'success' ? '✓ Success' : '✕ Failed'}
-                        </span>
+                    <tr key={i} onMouseEnter={e => e.currentTarget.style.background = 'var(--background)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <td style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>{run.num}</td>
+                      <td style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>{run.timestamp}</td>
+                      <td style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: 10, background: run.trigger === 'Manual' ? 'var(--primary-light)' : 'var(--background)', color: run.trigger === 'Manual' ? 'var(--primary-dark)' : 'var(--text-muted)', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>{run.trigger}</span>
                       </td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{run.rows.toLocaleString()}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{run.duration}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{run.size}</td>
-
+                      <td style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: run.status === 'success' ? '#166534' : '#991B1B', fontWeight: 700, fontSize: 11 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: run.status === 'success' ? '#22C55E' : '#EF4444' }}></span>
+                          {run.status === 'success' ? 'SUCCESS' : 'FAILED'}
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>{run.rows.toLocaleString()}</td>
+                      <td style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>{run.duration}</td>
+                      <td style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>{run.size}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {visibleDrawerRuns.length === 0 && (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>No run history found.</div>
+              )}
             </div>
 
-            {/* Drawer Pagination */}
-            <div style={{ padding: '8px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, flexWrap: 'wrap', gap: 8 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                Showing {filteredDrawerRuns.length === 0 ? 0 : (currentRunPage - 1) * 5 + 1}–{filteredDrawerRuns.length === 0 ? 0 : Math.min(currentRunPage * 5, filteredDrawerRuns.length)} of {filteredDrawerRuns.length} runs
-              </span>
-              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                <button onClick={() => setPage(currentRunPage - 1)}
-                  style={{ minWidth: 28, height: 28, border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>←</button>
-                {Array.from({ length: runPageCount }, (_, index) => {
-                  const pageNumber = index + 1;
-                  return (
-                    <button key={pageNumber} onClick={() => setPage(pageNumber)}
-                      style={{ minWidth: 28, height: 28, border: '1px solid var(--border)', borderRadius: 5, background: pageNumber === currentRunPage ? 'var(--primary)' : 'var(--surface)', color: pageNumber === currentRunPage ? 'var(--surface)' : 'var(--text-primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{pageNumber}</button>
-                  );
-                })}
-                <button onClick={() => setPage(currentRunPage + 1)}
-                  style={{ minWidth: 28, height: 28, border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>→</button>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Showing {(currentRunPage-1)*runsPerPage+1}–{Math.min(currentRunPage*runsPerPage, filteredDrawerRuns.length)} of {filteredDrawerRuns.length} runs</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button disabled={currentRunPage === 1} onClick={() => setPage(currentRunPage - 1)} style={{ padding: '5px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: currentRunPage === 1 ? 'not-allowed' : 'pointer', fontSize: 11 }}>Prev</button>
+                <button disabled={currentRunPage === runPageCount} onClick={() => setPage(currentRunPage + 1)} style={{ padding: '5px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: currentRunPage === runPageCount ? 'not-allowed' : 'pointer', fontSize: 11 }}>Next</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* DELETE CONFIRM DIALOG — PRD Section 6.5 */}
       {showDeleteConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.52)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={e => { if (e.target === e.currentTarget) setShowDeleteConfirm(false); }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 12, width: 400, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.2)' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Delete Schedule</div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ width: 400, background: 'var(--surface)', borderRadius: 24, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '32px 32px 24px 32px', textAlign: 'center' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#FEF2F2', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, margin: '0 auto 20px auto' }}>🗑️</div>
+              <h3 style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 8px 0' }}>Delete Schedule</h3>
+              <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                Are you sure you want to permanently delete the schedule for <strong style={{ color: 'var(--text-primary)' }}>{deleteTarget}</strong>? This action cannot be undone.
+              </p>
             </div>
-            <div style={{ padding: '16px 20px' }}>
-              <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 6 }}>Are you sure you want to delete the schedule for:</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8 }}>{deleteTarget}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>This action cannot be undone. All run history for this schedule will be preserved in Run History.</div>
-            </div>
-            <div style={{ padding: '12px 20px', background: 'var(--background)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button onClick={() => setShowDeleteConfirm(false)}
-                style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--text-primary)' }}>Cancel</button>
-              <button onClick={confirmDelete}
-                style={{ padding: '6px 14px', background: '#DC2626', color: 'var(--surface)', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Delete Schedule</button>
+            <div style={{ padding: '20px 32px', background: 'var(--background)', borderTop: '1px solid var(--border)', display: 'flex', gap: 12 }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: '12px', borderRadius: 12, border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>CANCEL</button>
+              <button onClick={confirmDelete} style={{ flex: 1, padding: '12px', borderRadius: 12, border: 'none', background: '#DC2626', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 15px rgba(220,38,38,0.2)' }}>DELETE IT</button>
             </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+export default function SchedulesPage() {
+  return (
+    <Suspense fallback={<div>Loading schedules...</div>}>
+      <SchedulesContent />
+    </Suspense>
   );
 }

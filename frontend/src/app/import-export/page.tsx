@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/immutability */
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/shared/Sidebar';
 import Topbar from '@/components/shared/Topbar';
@@ -18,7 +18,7 @@ interface Report {
   updatedAt?: string;
 }
 
-export default function ImportExportPage() {
+function ImportExportContent() {
   const searchParams = useSearchParams();
   const [reports, setReports] = useState<Report[]>([]);
   const [search, setSearch] = useState(searchParams.get('search') || '');
@@ -118,8 +118,6 @@ export default function ImportExportPage() {
   const handleExportTemplates = async () => {
     try {
       setExporting(true);
-      // We use the same all endpoint but could filter or have a specific one
-      // For now, let's just fetch reports and download them
       const response = await api.get('/v1/reports');
       const dataStr = JSON.stringify({ version: '1.0', reports: response.data }, null, 2);
       const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -170,7 +168,6 @@ export default function ImportExportPage() {
       const text = await file.text();
       const data = JSON.parse(text);
 
-      // Handle both direct array and { reports: [...], categories: [...] } format
       const reportsToImport = Array.isArray(data) ? data : data.reports || [];
       const categoriesToImport = data.categories || [];
 
@@ -186,14 +183,10 @@ export default function ImportExportPage() {
       alert(msg);
       
       setImportDone(true);
-
-      // Refresh the list
       await fetchReports();
 
-      // Reset success message after 3 seconds
       setTimeout(() => setImportDone(false), 3000);
 
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -235,7 +228,6 @@ export default function ImportExportPage() {
   const handleAddNewReport = async () => {
     setValidationError('');
 
-    // Validation
     if (!newReport.name.trim()) {
       setValidationError('Report name is required');
       return;
@@ -255,7 +247,6 @@ export default function ImportExportPage() {
         config: {},
       });
 
-      // Reset form
       setNewReport({
         name: '',
         slug: '',
@@ -264,8 +255,6 @@ export default function ImportExportPage() {
         database: 'ERP',
       });
       setShowNewReportForm(false);
-
-      // Refresh list
       await fetchReports();
     } catch (error) {
       console.error('Failed to create report:', error);
@@ -314,7 +303,7 @@ export default function ImportExportPage() {
             </div>
           </div>
 
-          {/* IE GRID — from index.html .ie-grid */}
+          {/* IE GRID */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
 
             {/* EXPORT CARD */}
@@ -552,5 +541,13 @@ export default function ImportExportPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ImportExportPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ImportExportContent />
+    </Suspense>
   );
 }

@@ -2,13 +2,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import React, { useState, useEffect, Fragment } from 'react';
+import React, { useState, useEffect, Fragment, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/shared/Sidebar';
 import Topbar from '@/components/shared/Topbar';
 import api from '@/lib/api';
 
-export default function ReportListPage() {
+function ReportListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -31,7 +31,6 @@ export default function ReportListPage() {
 
   const fetchData = async () => {
     try {
-      // Avoid redundant state update if already loading
       setLoading(curr => curr ? curr : true); 
       const [reportsRes, categoriesRes] = await Promise.all([
         api.get('/v1/reports'),
@@ -54,7 +53,6 @@ export default function ReportListPage() {
   useEffect(() => {
     const s = searchParams.get('search');
     if (s !== null && s !== search) {
-       
       setSearch(s);
     }
   }, [searchParams, search]);
@@ -62,11 +60,9 @@ export default function ReportListPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: '', icon: '📁', color: '#3B82F6' });
 
-  // Custom Delete Modal & Toast State
   const [reportToDelete, setReportToDelete] = useState<{ id: string; name: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Schedule Modal State
   const [scheduleTarget, setScheduleTarget] = useState<{ id: string; name: string } | null>(null);
   const [schedFreq, setSchedFreq] = useState('daily');
   const [schedTime, setSchedTime] = useState('08:00');
@@ -83,7 +79,6 @@ export default function ReportListPage() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
-
 
   const fmtColor: Record<string, { bg: string; color: string }> = {
     xlsx: { bg: 'var(--primary-light)', color: 'var(--primary-dark)' },
@@ -428,7 +423,7 @@ export default function ReportListPage() {
             </button>
           </div>
 
-          {/* Filter row — PRD Section 4.3 */}
+          {/* Filter row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
             <input type="search" value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search by name, slug, endpoint…"
@@ -473,7 +468,7 @@ export default function ReportListPage() {
             </div>
             <div style={{ flex: 1 }} />
 
-            {/* View toggle — PRD Section 4.5 */}
+            {/* View toggle */}
             <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
               <button onClick={() => setView('grouped')}
                 style={{ padding: '5px 10px', border: 'none', background: view === 'grouped' ? 'var(--primary)' : 'var(--surface)', color: view === 'grouped' ? 'var(--surface)' : 'var(--text-primary)', cursor: 'pointer', fontSize: 12,  fontWeight: 600 }}>🗂 Grouped</button>
@@ -513,7 +508,7 @@ export default function ReportListPage() {
           </div>
         </div>
 
-        {/* SUMMARY STRIP — PRD Section 4.4 */}
+        {/* SUMMARY STRIP */}
         <div style={{ padding: '6px 20px', background: 'var(--background)', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
           <span><b style={{ color: 'var(--text-primary)' }}>{filtered.length}</b> reports</span>
           <span><b style={{ color: 'var(--accent)' }}>{totalActive}</b> active</span>
@@ -631,7 +626,6 @@ export default function ReportListPage() {
                           await api.delete(`/v1/reports/categories/${c.id}`);
                           showToast('Category deleted! 🗑️', 'success');
                           fetchData();
-                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
                         } catch (error) {
                           showToast('Failed to delete category.', 'error');
                         }
@@ -691,7 +685,6 @@ export default function ReportListPage() {
                     await api.delete(`/v1/reports/${reportToDelete.id}`);
                     showToast('Report deleted successfully! 🗑️', 'success');
                     fetchData();
-                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
                   } catch (error) {
                     showToast('Failed to delete report.', 'error');
                   }
@@ -798,31 +791,47 @@ export default function ReportListPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
                   {[{id:'email',icon:'📧',label:'Email'},{id:'webhook',icon:'🔗',label:'Webhook'},{id:'storage',icon:'💾',label:'Storage'}].map(d => (
                     <div key={d.id} onClick={() => setSchedDelivery(d.id)}
-                      style={{ border: schedDelivery === d.id ? '2px solid var(--primary)' : '2px solid transparent', background: schedDelivery === d.id ? 'var(--primary-light)' : 'var(--background)', borderRadius: 12, padding: '14px 10px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s' }}>
-                      <div style={{ fontSize: 24, marginBottom: 6 }}>{d.icon}</div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: schedDelivery === d.id ? 'var(--primary-dark)' : 'var(--text-primary)' }}>{d.label}</div>
+                      style={{ padding: '12px', textAlign: 'center', borderRadius: 14, fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                        background: schedDelivery === d.id ? 'var(--primary-light)' : 'var(--background)',
+                        border: schedDelivery === d.id ? '2px solid var(--primary)' : '2px solid transparent',
+                        color: schedDelivery === d.id ? 'var(--primary-dark)' : 'var(--text-primary)' }}>
+                        <div style={{ fontSize: 20, marginBottom: 4 }}>{d.icon}</div>
+                        {d.label}
                     </div>
                   ))}
                 </div>
                 {schedDelivery === 'email' && (
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>Recipient Email *</label>
-                    <input value={schedRecipient} onChange={e => setSchedRecipient(e.target.value)} placeholder="user@company.com" style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '2px solid var(--background)', background: 'var(--background)', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', outline: 'none' }} />
+                  <div style={{ animation: 'fadeIn 0.2s ease' }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>Recipient Email</label>
+                    <input type="email" value={schedRecipient} onChange={e => setSchedRecipient(e.target.value)} placeholder="e.g. boss@navacle.com" style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '2px solid var(--background)', background: 'var(--background)', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', outline: 'none' }} />
+                  </div>
+                )}
+                {schedDelivery !== 'email' && (
+                  <div style={{ padding: '16px', background: 'var(--background)', borderRadius: 14, border: '1px dashed var(--border)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+                    This delivery method will be available in the next update! 🚀
                   </div>
                 )}
               </div>
             </div>
             {/* Footer */}
-            <div style={{ padding: '20px 32px', background: 'var(--background)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <div style={{ padding: '24px 32px', background: 'var(--background)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button onClick={() => setScheduleTarget(null)} style={{ padding: '12px 24px', borderRadius: 12, border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>CANCEL</button>
-              <button onClick={saveScheduleFromReport} disabled={schedLoading} style={{ padding: '12px 28px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #EA580C, #C2410C)', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', opacity: schedLoading ? 0.7 : 1 }}>
-                {schedLoading ? 'SAVING...' : '⏰ CREATE SCHEDULE'}
+              <button onClick={saveScheduleFromReport} disabled={schedLoading}
+                style={{ padding: '12px 32px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', boxShadow: '0 10px 20px -5px rgba(37,99,235,0.3)', opacity: schedLoading ? 0.7 : 1 }}>
+                {schedLoading ? '⏳ SCHEDULING...' : 'SET SCHEDULE'}
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
+  );
+}
+
+export default function ReportListPage() {
+  return (
+    <Suspense fallback={<div>Loading reports...</div>}>
+      <ReportListContent />
+    </Suspense>
   );
 }

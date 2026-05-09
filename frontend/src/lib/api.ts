@@ -1,7 +1,16 @@
 import axios from 'axios';
 
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'dev-reports-studio.navacle.com') return 'https://dev-reports-api.navacle.com';
+    if (host === 'sit-reports-studio.navacle.com') return 'https://sit-reports-api.navacle.com';
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+};
+
 const api = axios.create({
-  baseURL: 'http://localhost:3001',
+  baseURL: getApiBaseUrl(),
   withCredentials: true,
 });
 
@@ -27,7 +36,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url.includes('/auth/refresh')) {
       originalRequest._retry = true;
       try {
-        const res = await axios.get('http://localhost:3001/v1/auth/refresh', {
+        const res = await axios.get(`${getApiBaseUrl()}/v1/auth/refresh`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('navacle_token')}`
           }
